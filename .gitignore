@@ -1,9 +1,13 @@
 .DS_Store
 *.log
+__pycache__/
+*.pyc
+
+# Generated MIDI ideas are local scratch output.
+generated/
 
 # Keep actual Logic Pro projects and media out of this helper repo.
 *.logicx/
 *.logicx
 Audio Files/
 Bounces/
-

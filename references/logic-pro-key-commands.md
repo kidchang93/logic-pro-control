@@ -16,6 +16,8 @@ This reference records the assumptions used by `scripts/logicpro.sh`.
 | `play-toggle` | Play/stop transport | Space, key code `49` |
 | `play-from-beginning` | Move playhead to project start, then play | Return key code `36`, then Space key code `49` |
 | `record-toggle` | Record toggle | `R` |
+| `generate-midi` | Create a MIDI file from a compact prompt | Python MIDI writer |
+| `open-midi` | Open/import a generated MIDI file in Logic Pro | `open -a "Logic Pro" file.mid` |
 | `go-to-beginning` | Return to beginning | Return, key code `36` |
 | `cycle-toggle` | Cycle mode toggle | `C` |
 | `metronome-toggle` | Metronome toggle | `K` |

@@ -32,6 +32,8 @@ scripts/logicpro.sh focus
 scripts/logicpro.sh play-toggle
 scripts/logicpro.sh play-from-beginning
 scripts/logicpro.sh record-toggle
+scripts/logicpro.sh generate-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
+scripts/logicpro.sh open-midi generated/example.mid
 scripts/logicpro.sh save
 scripts/logicpro.sh bounce
 ```
@@ -59,6 +61,8 @@ Ask for clarification before destructive or expensive actions when the target is
 - `play-toggle`: press Space.
 - `play-from-beginning`: press Return, then Space.
 - `record-toggle`: press `R`.
+- `generate-midi "<prompt>" [output.mid]`: generate a short piano MIDI idea from a compact natural-language prompt.
+- `open-midi <file.mid>`: ask Logic Pro to open/import a generated MIDI file.
 - `go-to-beginning`: press Return.
 - `cycle-toggle`: press `C`.
 - `metronome-toggle`: press `K`.
@@ -68,6 +72,12 @@ Ask for clarification before destructive or expensive actions when the target is
 - `new-software-track`: press Option-Command-S.
 
 For key command details and caveats, read `references/logic-pro-key-commands.md`.
+
+## Natural-Language MIDI Ideas
+
+Use `scripts/generate_midi.py` through `scripts/logicpro.sh generate-midi` for requests such as "make a 4-bar neo-soul piano MIDI idea". Avoid claiming to clone a living artist's exact style; translate artist references into musical traits such as neo-soul harmony, gospel voicings, extended chords, swung timing, or laid-back velocity.
+
+Generated files are written under `generated/` by default. Use `scripts/logicpro.sh open-midi <file.mid>` to hand the file to Logic Pro. Exact insertion at the current playhead depends on Logic Pro's import UI state; verify the result before editing the project further.
 
 ## Extending
 

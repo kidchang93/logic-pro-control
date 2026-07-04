@@ -15,6 +15,8 @@ Usage:
   scripts/logicpro.sh play-toggle
   scripts/logicpro.sh play-from-beginning
   scripts/logicpro.sh record-toggle
+  scripts/logicpro.sh generate-midi <prompt> [output.mid]
+  scripts/logicpro.sh open-midi <file.mid>
   scripts/logicpro.sh go-to-beginning
   scripts/logicpro.sh cycle-toggle
   scripts/logicpro.sh metronome-toggle
@@ -186,6 +188,34 @@ play_from_beginning() {
   send_keycode 49
 }
 
+generate_midi() {
+  if (( $# < 1 || $# > 2 )); then
+    usage >&2
+    exit 64
+  fi
+
+  if (( $# == 2 )); then
+    python3 "$(dirname "$0")/generate_midi.py" "$1" --output "$2"
+  else
+    python3 "$(dirname "$0")/generate_midi.py" "$1"
+  fi
+}
+
+open_midi() {
+  if (( $# != 1 )); then
+    usage >&2
+    exit 64
+  fi
+
+  local midi_path="$1"
+  if [[ ! -f "$midi_path" ]]; then
+    printf 'MIDI file not found: %s\n' "$midi_path" >&2
+    exit 66
+  fi
+
+  open -a "$APP_NAME" "$midi_path"
+}
+
 click_menu_path() {
   if (( $# < 2 )); then
     printf 'menu requires at least <menu-name> <menu-item>\n' >&2
@@ -243,6 +273,12 @@ case "$command" in
     ;;
   record-toggle)
     send_key r
+    ;;
+  generate-midi)
+    generate_midi "$@"
+    ;;
+  open-midi)
+    open_midi "$@"
     ;;
   go-to-beginning)
     send_keycode 36
