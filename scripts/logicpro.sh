@@ -23,6 +23,8 @@ Usage:
   scripts/logicpro.sh generate-midi <prompt> [output.mid]
   scripts/logicpro.sh generate-midi-in-project <prompt> [filename.mid]
   scripts/logicpro.sh open-midi <file.mid>
+  scripts/logicpro.sh import-midi <file.mid>
+  scripts/logicpro.sh generate-and-import-midi <prompt> [filename.mid]
   scripts/logicpro.sh go-to-beginning
   scripts/logicpro.sh cycle-toggle
   scripts/logicpro.sh metronome-toggle
@@ -195,6 +197,18 @@ open_project() {
   printf 'project=%s\n' "$project_path"
 }
 
+project_generated_dir() {
+  local project_path="$1"
+  python3 - "$project_path" <<'PY'
+from pathlib import Path
+import sys
+
+project = Path(sys.argv[1])
+name = project.name[:-7] if project.name.endswith(".logicx") else project.stem
+print(project.parent / f"{name}.generated-midi")
+PY
+}
+
 current_project() {
   local project_path
   project_path="$(read_current_project)"
@@ -289,7 +303,7 @@ generate_midi_in_project() {
 
   local project_path output_dir output_path filename
   project_path="$(require_current_project)"
-  output_dir="$project_path/Media/Generated MIDI"
+  output_dir="$(project_generated_dir "$project_path")"
   mkdir -p "$output_dir"
 
   if (( $# == 2 )); then
@@ -352,6 +366,167 @@ end run
 APPLESCRIPT
 }
 
+click_first_existing_menu_path() {
+  local encoded_paths="$1"
+  activate_logic
+
+  osascript - "$APP_NAME" "$encoded_paths" <<'APPLESCRIPT' >/dev/null
+on splitText(theText, delimiter)
+  set oldDelimiters to AppleScript's text item delimiters
+  set AppleScript's text item delimiters to delimiter
+  set theItems to text items of theText
+  set AppleScript's text item delimiters to oldDelimiters
+  return theItems
+end splitText
+
+on run argv
+  set appName to item 1 of argv
+  set encodedPaths to item 2 of argv
+  set pathsToTry to my splitText(encodedPaths, linefeed)
+
+  tell application "System Events"
+    tell process appName
+      repeat with encodedPath in pathsToTry
+        if encodedPath is not "" then
+          set parts to my splitText(encodedPath as text, " > ")
+          try
+            set currentMenu to menu (item 1 of parts) of menu bar 1
+            repeat with i from 2 to count of parts
+              set partName to item i of parts
+              if i is (count of parts) then
+                click menu item partName of currentMenu
+                return encodedPath
+              else
+                set currentMenu to menu 1 of menu item partName of currentMenu
+              end if
+            end repeat
+          end try
+        end if
+      end repeat
+    end tell
+  end tell
+
+  error "No matching menu path found"
+end run
+APPLESCRIPT
+}
+
+choose_file_in_dialog() {
+  local file_path="$1"
+  osascript - "$file_path" <<'APPLESCRIPT'
+on run argv
+  set filePath to item 1 of argv
+  set oldClipboard to the clipboard
+  tell application "System Events"
+    keystroke "g" using {command down, shift down}
+    delay 0.4
+    keystroke "a" using {command down}
+    delay 0.1
+    set the clipboard to filePath
+    keystroke "v" using {command down}
+    delay 0.2
+    key code 36
+    delay 0.8
+    key code 36
+  end tell
+  delay 0.2
+  set the clipboard to oldClipboard
+end run
+APPLESCRIPT
+}
+
+select_file_with_peekaboo() {
+  local file_path="$1"
+  local base_name
+  base_name="$(basename "$file_path")"
+
+  command -v peekaboo >/dev/null 2>&1 || return 1
+
+  local components
+  components="$(python3 - "$file_path" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1]).resolve()
+root = Path.home() / "Music" / "Logic"
+try:
+    rel = path.parent.relative_to(root)
+except ValueError:
+    raise SystemExit(1)
+for part in rel.parts:
+    print(part)
+PY
+)" || return 1
+
+  peekaboo app switch com.apple.logic10 >/dev/null 2>&1 || true
+  sleep 0.3
+
+  peekaboo click --app com.apple.logic10 --coords 374,289 --global-coords --foreground >/dev/null 2>&1 || \
+    peekaboo click "Logic" --app com.apple.logic10 --foreground --wait-for 3000 >/dev/null 2>&1 || return 1
+  sleep 0.2
+
+  local part
+  while IFS= read -r part; do
+    [[ -n "$part" ]] || continue
+    peekaboo click "$part" --app com.apple.logic10 --double --foreground --wait-for 3000 >/dev/null 2>&1 || \
+      peekaboo click --app com.apple.logic10 --coords 570,267 --global-coords --double --foreground >/dev/null 2>&1 || return 1
+    sleep 0.3
+  done <<< "$components"
+
+  peekaboo click "$base_name" --app com.apple.logic10 --foreground --wait-for 3000 >/dev/null 2>&1 || \
+    peekaboo click --app com.apple.logic10 --coords 610,267 --global-coords --foreground >/dev/null 2>&1 || return 1
+  sleep 0.2
+  osascript <<'APPLESCRIPT'
+tell application "System Events" to key code 36
+APPLESCRIPT
+}
+
+import_midi() {
+  if (( $# != 1 )); then
+    usage >&2
+    exit 64
+  fi
+
+  local midi_path
+  midi_path="$(absolute_path "$1")"
+  if [[ ! -f "$midi_path" ]]; then
+    printf 'MIDI file not found: %s\n' "$midi_path" >&2
+    exit 66
+  fi
+
+  require_accessibility
+  click_first_existing_menu_path $'파일 > 가져오기 > MIDI 파일…\nFile > Import > MIDI File...'
+  sleep 0.8
+  if ! select_file_with_peekaboo "$midi_path"; then
+    choose_file_in_dialog "$midi_path"
+  fi
+  printf 'imported=%s\n' "$midi_path"
+}
+
+generate_and_import_midi() {
+  if (( $# < 1 || $# > 2 )); then
+    usage >&2
+    exit 64
+  fi
+
+  local project_path output_dir output_path filename
+  project_path="$(require_current_project)"
+  output_dir="$(project_generated_dir "$project_path")"
+  mkdir -p "$output_dir"
+
+  if (( $# == 2 )); then
+    filename="$2"
+    [[ "$filename" == *.mid ]] || filename="${filename}.mid"
+    output_path="$output_dir/$filename"
+  else
+    output_path="$output_dir/$(basename "$(python3 "$SCRIPT_DIR/generate_midi.py" "$1" --print-default-path)")"
+  fi
+
+  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$output_path"
+  import_midi "$output_path"
+  printf 'project=%s\n' "$project_path"
+}
+
 command="${1:-}"
 shift || true
 
@@ -392,6 +567,12 @@ case "$command" in
     ;;
   open-midi)
     open_midi "$@"
+    ;;
+  import-midi)
+    import_midi "$@"
+    ;;
+  generate-and-import-midi)
+    generate_and_import_midi "$@"
     ;;
   go-to-beginning)
     send_keycode 36

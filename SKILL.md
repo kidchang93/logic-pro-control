@@ -36,6 +36,7 @@ scripts/logicpro.sh play-from-beginning
 scripts/logicpro.sh record-toggle
 scripts/logicpro.sh generate-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
 scripts/logicpro.sh generate-midi-in-project "neo-soul jazz piano, 4 bars, lush gospel voicings"
+scripts/logicpro.sh generate-and-import-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
 scripts/logicpro.sh open-midi generated/example.mid
 scripts/logicpro.sh save
 scripts/logicpro.sh bounce
@@ -67,7 +68,8 @@ Ask for clarification before destructive or expensive actions when the target is
 - `open-project <project.logicx>`: open a Logic project and remember it as the current project for project-scoped generation.
 - `current-project`: print the remembered Logic project path.
 - `generate-midi "<prompt>" [output.mid]`: generate a short piano MIDI idea from a compact natural-language prompt.
-- `generate-midi-in-project "<prompt>" [filename.mid]`: generate MIDI inside the remembered project's `Media/Generated MIDI/` folder.
+- `generate-midi-in-project "<prompt>" [filename.mid]`: generate MIDI in a visible project-adjacent folder such as `beatrobatic.generated-midi/`.
+- `generate-and-import-midi "<prompt>" [filename.mid]`: generate project-scoped MIDI, then import it into the open Logic project UI.
 - `open-midi <file.mid>`: ask Logic Pro to open/import a generated MIDI file.
 - `go-to-beginning`: press Return.
 - `cycle-toggle`: press `C`.
@@ -83,9 +85,9 @@ For key command details and caveats, read `references/logic-pro-key-commands.md`
 
 Use `scripts/generate_midi.py` through `scripts/logicpro.sh generate-midi` for requests such as "make a 4-bar neo-soul piano MIDI idea". Avoid claiming to clone a living artist's exact style; translate artist references into musical traits such as neo-soul harmony, gospel voicings, extended chords, swung timing, or laid-back velocity.
 
-Use `open-project` before project-scoped generation so the script knows which open project owns the result. `generate-midi-in-project` writes files to `<project.logicx>/Media/Generated MIDI/`, keeping generated ideas with the Logic project rather than in this helper repository.
+Use `open-project` before project-scoped generation so the script knows which open project owns the result. `generate-midi-in-project` writes files next to the project package, for example `beatrobatic.generated-midi/`, because macOS file dialogs do not reliably navigate inside `.logicx` packages.
 
-Use `scripts/logicpro.sh open-midi <file.mid>` to hand a generated file to Logic Pro. Exact insertion at the current playhead depends on Logic Pro's import UI state; verify the result before editing the project further.
+Use `scripts/logicpro.sh generate-and-import-midi "<prompt>"` when the user expects the result to appear as a Logic track/region. Exact insertion at the current playhead depends on Logic Pro's import UI state; verify the result before editing the project further.
 
 ## Extending
 

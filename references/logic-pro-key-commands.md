@@ -19,7 +19,8 @@ This reference records the assumptions used by `scripts/logicpro.sh`.
 | `open-project` | Open and remember a Logic project | `open -a "Logic Pro" project.logicx` plus local state |
 | `current-project` | Show remembered Logic project | Local state file |
 | `generate-midi` | Create a MIDI file from a compact prompt | Python MIDI writer |
-| `generate-midi-in-project` | Create MIDI inside the remembered Logic project package | Python MIDI writer to `<project.logicx>/Media/Generated MIDI/` |
+| `generate-midi-in-project` | Create MIDI beside the remembered Logic project package | Python MIDI writer to `<project-name>.generated-midi/` |
+| `generate-and-import-midi` | Generate project-scoped MIDI and import it into the open Logic UI | MIDI writer plus Logic import dialog automation |
 | `open-midi` | Open/import a generated MIDI file in Logic Pro | `open -a "Logic Pro" file.mid` |
 | `go-to-beginning` | Return to beginning | Return, key code `36` |
 | `cycle-toggle` | Cycle mode toggle | `C` |
