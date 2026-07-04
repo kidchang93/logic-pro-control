@@ -13,6 +13,7 @@ This repository contains a small control layer for Logic Pro:
 ```bash
 scripts/logicpro.sh doctor
 scripts/logicpro.sh open-project /Users/kidchang/Music/Logic/beatrobatic.logicx
+scripts/logicpro.sh suggest-instruments "피아노 4마디 패턴을 멋진 코드 진행으로 만들어줘"
 scripts/logicpro.sh generate-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
 scripts/logicpro.sh play-from-beginning
 ```
@@ -33,7 +34,21 @@ scripts/logicpro.sh generate-midi "neo-soul jazz piano, 4 bars, lush gospel voic
 scripts/logicpro.sh open-midi generated/<file>.mid
 ```
 
-The generator writes standard `.mid` files with piano voicings, humanized timing, and velocity variation. Exact placement in the current Logic project depends on Logic Pro's import behavior, so verify the imported region before continuing.
+The generator writes standard `.mid` files with piano voicings, humanized timing, velocity variation, and an auto-selected Piano/Keyboard program change. By default each run uses a fresh random seed, so the same prompt can produce a different take; pass `--seed` directly to `scripts/generate_midi.py` when repeatability is needed.
+
+To preview likely sounds:
+
+```bash
+scripts/logicpro.sh suggest-instruments "피아노 4마디 패턴을 멋진 코드 진행으로 만들어줘"
+```
+
+To pin a sound, set `LOGIC_MIDI_INSTRUMENT` to one of `studio-grand`, `bright-piano`, `electric-grand`, `honky-tonk`, `warm-ep`, `digital-ep`, `harpsichord`, or `clavinet`:
+
+```bash
+LOGIC_MIDI_INSTRUMENT=warm-ep scripts/logicpro.sh generate-and-import-midi "4마디 네오소울 피아노 코드 진행"
+```
+
+Exact placement in the current Logic project depends on Logic Pro's import behavior, so verify the imported region before continuing.
 
 For project-scoped output, open or register the project first:
 

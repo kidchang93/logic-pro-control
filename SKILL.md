@@ -35,6 +35,7 @@ scripts/logicpro.sh play-toggle
 scripts/logicpro.sh play-from-beginning
 scripts/logicpro.sh record-toggle
 scripts/logicpro.sh generate-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
+scripts/logicpro.sh suggest-instruments "피아노 4마디 패턴을 멋진 코드 진행으로 만들어줘"
 scripts/logicpro.sh generate-midi-in-project "neo-soul jazz piano, 4 bars, lush gospel voicings"
 scripts/logicpro.sh generate-and-import-midi "neo-soul jazz piano, 4 bars, lush gospel voicings"
 scripts/logicpro.sh open-midi generated/example.mid
@@ -68,6 +69,7 @@ Ask for clarification before destructive or expensive actions when the target is
 - `open-project <project.logicx>`: open a Logic project and remember it as the current project for project-scoped generation.
 - `current-project`: print the remembered Logic project path.
 - `generate-midi "<prompt>" [output.mid]`: generate a short piano MIDI idea from a compact natural-language prompt.
+- `suggest-instruments "<prompt>"`: print likely Piano/Keyboard instrument candidates for a prompt.
 - `generate-midi-in-project "<prompt>" [filename.mid]`: generate MIDI in a visible project-adjacent folder such as `beatrobatic.generated-midi/`.
 - `generate-and-import-midi "<prompt>" [filename.mid]`: generate project-scoped MIDI, then import it into the open Logic project UI.
 - `open-midi <file.mid>`: ask Logic Pro to open/import a generated MIDI file.
@@ -84,6 +86,18 @@ For key command details and caveats, read `references/logic-pro-key-commands.md`
 ## Natural-Language MIDI Ideas
 
 Use `scripts/generate_midi.py` through `scripts/logicpro.sh generate-midi` for requests such as "make a 4-bar neo-soul piano MIDI idea". Avoid claiming to clone a living artist's exact style; translate artist references into musical traits such as neo-soul harmony, gospel voicings, extended chords, swung timing, or laid-back velocity.
+
+For natural-language requests like "피아노 4마디 패턴을 멋진 코드 진행으로 만들어줘", start from the open project context:
+
+1. Run `scripts/logicpro.sh current-project`; if it is empty, run `scripts/logicpro.sh open-project <project.logicx>`.
+2. Focus Logic and keep the user's current playhead/bar position unless they ask for a different insertion point.
+3. Use `scripts/logicpro.sh suggest-instruments "<prompt>"` when the user wants choice or when the sound is ambiguous.
+4. If the user picks a sound, set `LOGIC_MIDI_INSTRUMENT=<slug>` for generation; otherwise let the generator auto-pick from Piano/Keyboard sounds.
+5. Run `scripts/logicpro.sh generate-and-import-midi "<prompt>"` so the MIDI appears in the open Logic UI as a track/region, not only as a file.
+
+The MIDI generator now varies each run by default. Use `--seed <number>` directly with `scripts/generate_midi.py` only when repeatability is needed.
+
+Available Piano/Keyboard slugs include `studio-grand`, `bright-piano`, `electric-grand`, `honky-tonk`, `warm-ep`, `digital-ep`, `harpsichord`, and `clavinet`. Prefer `warm-ep`, `electric-grand`, or `digital-ep` for neo-soul/fusion prompts; prefer `clavinet` for funk; prefer `honky-tonk` or `warm-ep` for lo-fi/vintage prompts.
 
 Use `open-project` before project-scoped generation so the script knows which open project owns the result. `generate-midi-in-project` writes files next to the project package, for example `beatrobatic.generated-midi/`, because macOS file dialogs do not reliably navigate inside `.logicx` packages.
 

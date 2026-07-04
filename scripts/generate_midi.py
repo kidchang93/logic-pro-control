@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import random
 import re
 import struct
@@ -84,6 +83,28 @@ PROGRESSIONS = {
 
 
 @dataclass(frozen=True)
+class Instrument:
+    slug: str
+    display_name: str
+    program: int
+    tags: tuple[str, ...]
+
+
+PIANO_KEYBOARD_INSTRUMENTS = [
+    Instrument("studio-grand", "Studio Grand Piano", 0, ("grand", "acoustic", "classic")),
+    Instrument("bright-piano", "Bright Piano", 1, ("bright", "pop", "cutting")),
+    Instrument("electric-grand", "Electric Grand Piano", 2, ("electric", "grand", "fusion")),
+    Instrument("honky-tonk", "Honky Tonk Piano", 3, ("lofi", "vintage", "detuned")),
+    Instrument("warm-ep", "Warm Electric Piano", 4, ("electric", "rhodes", "warm", "neo-soul")),
+    Instrument("digital-ep", "Digital Electric Piano", 5, ("electric", "dx", "bell", "glassy")),
+    Instrument("harpsichord", "Harpsichord", 6, ("baroque", "pluck", "cinematic")),
+    Instrument("clavinet", "Clavinet", 7, ("clav", "funk", "percussive")),
+]
+
+DEFAULT_AUTO_INSTRUMENTS = ("warm-ep", "electric-grand", "studio-grand", "digital-ep", "bright-piano", "clavinet")
+
+
+@dataclass(frozen=True)
 class NoteEvent:
     start: int
     duration: int
@@ -160,6 +181,59 @@ def choose_palette(prompt: str) -> str:
     if any(word in lower for word in ["lofi", "lo-fi", "로파이"]):
         return "lofi"
     return "neo_soul"
+
+
+def normalize_instrument_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def instruments_by_slug(slugs: tuple[str, ...] | set[str]) -> list[Instrument]:
+    by_slug = {instrument.slug: instrument for instrument in PIANO_KEYBOARD_INSTRUMENTS}
+    if isinstance(slugs, tuple):
+        return [by_slug[slug] for slug in slugs]
+    return [instrument for instrument in PIANO_KEYBOARD_INSTRUMENTS if instrument.slug in slugs]
+
+
+def instrument_candidates(prompt: str) -> list[Instrument]:
+    lower = prompt.lower()
+
+    if any(word in lower for word in ["clav", "클라비", "funk", "펑크"]):
+        return instruments_by_slug({"clavinet"})
+
+    if any(word in lower for word in ["rhodes", "ep", "electric", "일렉", "전기", "neo", "네오"]):
+        return instruments_by_slug({"warm-ep", "electric-grand", "digital-ep"})
+
+    if any(word in lower for word in ["lofi", "lo-fi", "로파이", "빈티지", "detune"]):
+        return instruments_by_slug({"honky-tonk", "warm-ep", "electric-grand"})
+
+    if any(word in lower for word in ["bright", "밝", "pop", "팝"]):
+        return instruments_by_slug({"bright-piano", "studio-grand", "digital-ep"})
+
+    if any(word in lower for word in ["grand", "그랜드", "acoustic", "어쿠스틱"]):
+        return instruments_by_slug({"studio-grand", "bright-piano"})
+
+    return instruments_by_slug(DEFAULT_AUTO_INSTRUMENTS)
+
+
+def choose_instrument(prompt: str, rng: random.Random, requested: str) -> Instrument:
+    requested_slug = normalize_instrument_name(requested)
+    if requested_slug and requested_slug != "auto":
+        for instrument in PIANO_KEYBOARD_INSTRUMENTS:
+            names = {instrument.slug, normalize_instrument_name(instrument.display_name), *instrument.tags}
+            if requested_slug in names:
+                return instrument
+        valid = ", ".join(instrument.slug for instrument in PIANO_KEYBOARD_INSTRUMENTS)
+        raise ValueError(f"Unknown instrument '{requested}'. Use one of: auto, {valid}")
+
+    candidates = instrument_candidates(prompt)
+    return rng.choice(candidates)
+
+
+def suggest_instruments(prompt: str) -> list[Instrument]:
+    candidates = instrument_candidates(prompt)
+    if len(candidates) <= 3:
+        return candidates
+    return candidates[:3]
 
 
 def transpose_progression(progression: list[tuple[str, str]], target_key: str) -> list[tuple[str, str]]:
@@ -255,12 +329,18 @@ def generate_events(prompt: str, bars: int, tempo: int, key: str, seed: int) -> 
     return sorted(events, key=lambda event: (event.start, event.note))
 
 
-def make_track(events: list[NoteEvent], tempo: int) -> bytes:
+def meta_text(event_type: int, text: str) -> bytes:
+    payload = text.encode("utf-8")
+    return b"\xff" + bytes([event_type]) + varlen(len(payload)) + payload
+
+
+def make_track(events: list[NoteEvent], tempo: int, instrument: Instrument) -> bytes:
     raw = bytearray()
     microseconds_per_quarter = int(60_000_000 / tempo)
+    raw.extend(varlen(0) + meta_text(0x03, instrument.display_name))
     raw.extend(varlen(0) + b"\xff\x51\x03" + microseconds_per_quarter.to_bytes(3, "big"))
     raw.extend(varlen(0) + b"\xff\x58\x04\x04\x02\x18\x08")
-    raw.extend(varlen(0) + b"\xc0\x00")  # Acoustic Grand Piano
+    raw.extend(varlen(0) + bytes([0xC0, instrument.program]))
 
     timed_messages: list[tuple[int, int, bytes]] = []
     for event in events:
@@ -279,10 +359,10 @@ def make_track(events: list[NoteEvent], tempo: int) -> bytes:
     return b"MTrk" + struct.pack(">I", len(raw)) + bytes(raw)
 
 
-def write_midi(path: Path, events: list[NoteEvent], tempo: int) -> None:
+def write_midi(path: Path, events: list[NoteEvent], tempo: int, instrument: Instrument) -> None:
     header = b"MThd" + struct.pack(">IHHH", 6, 0, 1, TPQ)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(header + make_track(events, tempo))
+    path.write_bytes(header + make_track(events, tempo, instrument))
 
 
 def default_output(prompt: str) -> Path:
@@ -293,39 +373,47 @@ def default_output(prompt: str) -> Path:
     return Path("generated") / f"{stamp}-{slug}.mid"
 
 
-def seed_from_prompt(prompt: str) -> int:
-    digest = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-    return int(digest[:12], 16)
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Generate a short piano MIDI idea.")
     parser.add_argument("prompt", help="Natural-language music request.")
     parser.add_argument("--bars", type=int, default=4, help="Number of bars when not stated in prompt.")
     parser.add_argument("--tempo", type=int, default=86, help="Tempo in BPM when not stated in prompt.")
     parser.add_argument("--key", default="Db", help="Target key when not stated in prompt.")
+    parser.add_argument("--instrument", default="auto", help="Piano/keyboard instrument slug, or auto.")
     parser.add_argument("--seed", type=int, help="Deterministic random seed.")
     parser.add_argument("--output", "-o", type=Path, help="Output .mid path.")
     parser.add_argument("--print-default-path", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--suggest-instruments", action="store_true", help="Print likely piano/keyboard choices for the prompt.")
     args = parser.parse_args(argv)
 
     if args.print_default_path:
-      print(default_output(args.prompt))
-      return 0
+        print(default_output(args.prompt))
+        return 0
+
+    if args.suggest_instruments:
+        for instrument in suggest_instruments(args.prompt):
+            print(f"{instrument.slug}\t{instrument.display_name}\tprogram={instrument.program}")
+        return 0
 
     bars = parse_bars(args.prompt, args.bars)
     tempo = parse_tempo(args.prompt, args.tempo)
     key = parse_key(args.prompt, args.key)
-    seed = args.seed if args.seed is not None else seed_from_prompt(args.prompt)
+    seed = args.seed if args.seed is not None else random.SystemRandom().randint(0, 2**31 - 1)
+    rng = random.Random(seed)
+    instrument = choose_instrument(args.prompt, rng, args.instrument)
     output = args.output or default_output(args.prompt)
 
     events = generate_events(args.prompt, bars=bars, tempo=tempo, key=key, seed=seed)
-    write_midi(output, events, tempo)
+    write_midi(output, events, tempo, instrument)
 
     print(f"output={output}")
     print(f"bars={bars}")
     print(f"tempo={tempo}")
     print(f"key={key}")
+    print(f"seed={seed}")
+    print(f"instrument={instrument.slug}")
+    print(f"instrument_name={instrument.display_name}")
+    print(f"program={instrument.program}")
     print(f"events={len(events)}")
     return 0
 

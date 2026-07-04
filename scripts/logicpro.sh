@@ -21,6 +21,7 @@ Usage:
   scripts/logicpro.sh play-from-beginning
   scripts/logicpro.sh record-toggle
   scripts/logicpro.sh generate-midi <prompt> [output.mid]
+  scripts/logicpro.sh suggest-instruments <prompt>
   scripts/logicpro.sh generate-midi-in-project <prompt> [filename.mid]
   scripts/logicpro.sh open-midi <file.mid>
   scripts/logicpro.sh import-midi <file.mid>
@@ -42,6 +43,9 @@ Examples:
   scripts/logicpro.sh key b command
   scripts/logicpro.sh keycode 49
   scripts/logicpro.sh menu File Save
+
+Set LOGIC_MIDI_INSTRUMENT to pin generation to a piano/keyboard sound:
+  LOGIC_MIDI_INSTRUMENT=warm-ep scripts/logicpro.sh generate-and-import-midi "4마디 네오소울 피아노"
 EOF
 }
 
@@ -289,10 +293,19 @@ generate_midi() {
   fi
 
   if (( $# == 2 )); then
-    python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$2"
+    python3 "$SCRIPT_DIR/generate_midi.py" "$1" --instrument "${LOGIC_MIDI_INSTRUMENT:-auto}" --output "$2"
   else
-    python3 "$SCRIPT_DIR/generate_midi.py" "$1"
+    python3 "$SCRIPT_DIR/generate_midi.py" "$1" --instrument "${LOGIC_MIDI_INSTRUMENT:-auto}"
   fi
+}
+
+suggest_instruments() {
+  if (( $# != 1 )); then
+    usage >&2
+    exit 64
+  fi
+
+  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --suggest-instruments
 }
 
 generate_midi_in_project() {
@@ -315,7 +328,7 @@ generate_midi_in_project() {
     output_path="$output_dir/$(basename "${output_path:-generated.mid}")"
   fi
 
-  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$output_path"
+  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --instrument "${LOGIC_MIDI_INSTRUMENT:-auto}" --output "$output_path"
   printf 'project=%s\n' "$project_path"
 }
 
@@ -522,7 +535,7 @@ generate_and_import_midi() {
     output_path="$output_dir/$(basename "$(python3 "$SCRIPT_DIR/generate_midi.py" "$1" --print-default-path)")"
   fi
 
-  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$output_path"
+  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --instrument "${LOGIC_MIDI_INSTRUMENT:-auto}" --output "$output_path"
   import_midi "$output_path"
   printf 'project=%s\n' "$project_path"
 }
@@ -561,6 +574,9 @@ case "$command" in
     ;;
   generate-midi)
     generate_midi "$@"
+    ;;
+  suggest-instruments)
+    suggest_instruments "$@"
     ;;
   generate-midi-in-project)
     generate_midi_in_project "$@"
