@@ -5,6 +5,7 @@ __pycache__/
 
 # Generated MIDI ideas are local scratch output.
 generated/
+.logicpro-control-state
 
 # Keep actual Logic Pro projects and media out of this helper repo.
 *.logicx/

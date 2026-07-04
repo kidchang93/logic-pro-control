@@ -3,6 +3,9 @@ set -euo pipefail
 
 APP_NAME="${LOGIC_APP_NAME:-Logic Pro}"
 KEY_DELAY="${LOGIC_KEY_DELAY:-0.15}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STATE_FILE="${LOGIC_CONTROL_STATE_FILE:-$PROJECT_ROOT/.logicpro-control-state}"
 
 usage() {
   cat <<'EOF'
@@ -11,11 +14,14 @@ Usage:
   scripts/logicpro.sh doctor
   scripts/logicpro.sh launch
   scripts/logicpro.sh focus
+  scripts/logicpro.sh open-project <project.logicx>
+  scripts/logicpro.sh current-project
   scripts/logicpro.sh check-accessibility
   scripts/logicpro.sh play-toggle
   scripts/logicpro.sh play-from-beginning
   scripts/logicpro.sh record-toggle
   scripts/logicpro.sh generate-midi <prompt> [output.mid]
+  scripts/logicpro.sh generate-midi-in-project <prompt> [filename.mid]
   scripts/logicpro.sh open-midi <file.mid>
   scripts/logicpro.sh go-to-beginning
   scripts/logicpro.sh cycle-toggle
@@ -39,6 +45,15 @@ EOF
 
 escape_applescript_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+absolute_path() {
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+
+print(Path(sys.argv[1]).expanduser().resolve())
+PY
 }
 
 modifier_expr() {
@@ -131,6 +146,71 @@ doctor() {
   printf 'note=%s\n' 'If accessibility=false, grant Accessibility permission to the terminal or OpenClaw host before using key/menu commands.'
 }
 
+store_current_project() {
+  local project_path="$1"
+  printf 'project=%s\n' "$project_path" > "$STATE_FILE"
+}
+
+read_current_project() {
+  if [[ -n "${LOGIC_PROJECT_PATH:-}" ]]; then
+    absolute_path "$LOGIC_PROJECT_PATH"
+    return
+  fi
+
+  if [[ -f "$STATE_FILE" ]]; then
+    sed -n 's/^project=//p' "$STATE_FILE" | tail -n 1
+  fi
+}
+
+require_current_project() {
+  local project_path
+  project_path="$(read_current_project)"
+
+  if [[ -z "$project_path" || ! -d "$project_path" ]]; then
+    printf '%s\n' 'error=current Logic project is unknown' >&2
+    printf '%s\n' 'hint=Run scripts/logicpro.sh open-project /path/to/project.logicx first, or set LOGIC_PROJECT_PATH.' >&2
+    exit 78
+  fi
+
+  printf '%s\n' "$project_path"
+}
+
+open_project() {
+  if (( $# != 1 )); then
+    usage >&2
+    exit 64
+  fi
+
+  local project_path
+  project_path="$(absolute_path "$1")"
+  if [[ ! -d "$project_path" || "$project_path" != *.logicx ]]; then
+    printf 'Logic project not found: %s\n' "$project_path" >&2
+    exit 66
+  fi
+
+  open -a "$APP_NAME" "$project_path"
+  store_current_project "$project_path"
+  sleep "$KEY_DELAY"
+  status
+  printf 'project=%s\n' "$project_path"
+}
+
+current_project() {
+  local project_path
+  project_path="$(read_current_project)"
+  if [[ -z "$project_path" ]]; then
+    printf 'project=\n'
+    return
+  fi
+
+  printf 'project=%s\n' "$project_path"
+  if [[ -d "$project_path" ]]; then
+    printf 'exists=true\n'
+  else
+    printf 'exists=false\n'
+  fi
+}
+
 send_key() {
   local key="$1"
   local modifiers="${2:-}"
@@ -195,10 +275,34 @@ generate_midi() {
   fi
 
   if (( $# == 2 )); then
-    python3 "$(dirname "$0")/generate_midi.py" "$1" --output "$2"
+    python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$2"
   else
-    python3 "$(dirname "$0")/generate_midi.py" "$1"
+    python3 "$SCRIPT_DIR/generate_midi.py" "$1"
   fi
+}
+
+generate_midi_in_project() {
+  if (( $# < 1 || $# > 2 )); then
+    usage >&2
+    exit 64
+  fi
+
+  local project_path output_dir output_path filename
+  project_path="$(require_current_project)"
+  output_dir="$project_path/Media/Generated MIDI"
+  mkdir -p "$output_dir"
+
+  if (( $# == 2 )); then
+    filename="$2"
+    [[ "$filename" == *.mid ]] || filename="${filename}.mid"
+    output_path="$output_dir/$filename"
+  else
+    output_path="$(python3 "$SCRIPT_DIR/generate_midi.py" "$1" --print-default-path 2>/dev/null || true)"
+    output_path="$output_dir/$(basename "${output_path:-generated.mid}")"
+  fi
+
+  python3 "$SCRIPT_DIR/generate_midi.py" "$1" --output "$output_path"
+  printf 'project=%s\n' "$project_path"
 }
 
 open_midi() {
@@ -258,6 +362,12 @@ case "$command" in
   doctor)
     doctor
     ;;
+  open-project)
+    open_project "$@"
+    ;;
+  current-project)
+    current_project
+    ;;
   launch|focus)
     activate_logic
     status
@@ -276,6 +386,9 @@ case "$command" in
     ;;
   generate-midi)
     generate_midi "$@"
+    ;;
+  generate-midi-in-project)
+    generate_midi_in_project "$@"
     ;;
   open-midi)
     open_midi "$@"

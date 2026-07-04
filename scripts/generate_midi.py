@@ -306,7 +306,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--key", default="Db", help="Target key when not stated in prompt.")
     parser.add_argument("--seed", type=int, help="Deterministic random seed.")
     parser.add_argument("--output", "-o", type=Path, help="Output .mid path.")
+    parser.add_argument("--print-default-path", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+
+    if args.print_default_path:
+      print(default_output(args.prompt))
+      return 0
 
     bars = parse_bars(args.prompt, args.bars)
     tempo = parse_tempo(args.prompt, args.tempo)
@@ -327,4 +332,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
