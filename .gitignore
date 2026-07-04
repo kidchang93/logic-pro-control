@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+
+# Keep actual Logic Pro projects and media out of this helper repo.
+*.logicx/
+*.logicx
+Audio Files/
+Bounces/
+
